@@ -160,11 +160,8 @@ class ImageInfo {
         imageDateTime = tags["Image DateTime"];
     final latitudeNum = _parseCoordinate(latitude?.toString(), latitudeRef?.toString().toUpperCase() == "S"),
         longitudeNum = _parseCoordinate(longitude?.toString(), longitudeRef?.toString().toUpperCase() == "W"),
-        dateTime = _parseDateTime(exifDateTime?.toString()) ?? _parseDateTime(imageDateTime?.toString());
-    if (dateTime != null) {
-      return ImageInfo._(latitudeNum, longitudeNum, dateTime);
-    }
-    return null;
+        dateTime = _parseDateTime(exifDateTime?.toString()) ?? _parseDateTime(imageDateTime?.toString()) ?? _guessFileAge(file);
+    return ImageInfo._(latitudeNum, longitudeNum, dateTime);
   }
 
   double? latitude;
@@ -233,6 +230,21 @@ class ImageInfo {
     }
 
     final dateTime = DateTime(year, month, day, hour, minute, second);
+    return dateTime;
+  }
+
+  static DateTime _guessFileAge(File file) {
+    final stat = file.statSync();
+    var dateTime = stat.accessed;
+    if (stat.accessed.isBefore(dateTime)) {
+      dateTime = stat.accessed;
+    }
+    if (stat.changed.isBefore(dateTime)) {
+      dateTime = stat.changed;
+    }
+    if (stat.modified.isBefore(dateTime)) {
+      dateTime = stat.modified;
+    }
     return dateTime;
   }
 }
