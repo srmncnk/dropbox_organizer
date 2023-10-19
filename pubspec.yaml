@@ -1,0 +1,14 @@
+name: dropbox_camera_roll_organizer
+description: A tool to organize incoming camera roll photos on Dropbox.
+
+environment:
+  sdk: '>=2.19.6 <3.0.0'
+
+dependencies:
+  args:
+  exif: 
+  geocoder_offline:
+  http: 
+
+dev_dependencies:
+  pedantic: ^1.8.0
