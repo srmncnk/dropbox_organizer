@@ -1,13 +1,13 @@
 {
   "camera_roll_folder": "C:\\Users\\Simon\\Dropbox\\Camera Uploads",
   "camera_model_folder_mappings": {
-    "iPhone SE (2nd generation)": "Irmancnik",
-    "Pixel 6": "Irmancnik",
+    "iPhone SE (2nd generation)": "Irmančnik",
+    "Pixel 6": "Irmančnik",
     "Pixel 4a": "Mimica",
     "JNY-LX1": "Vika",
     "ANE-LX1": "Lenovšek"
   },
-  "group_by_location_folder": "Lenovšek",
+  "group_by_location_folder": "Irmančnik",
   "location_csv_file": "cities5000.txt",
   "global_location_csv_file": "cities15000.txt",
   "test_run": true
