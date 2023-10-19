@@ -56,8 +56,9 @@ void main(List<String> args) async {
     return;
   }
 
-  //await moveByMappings(cameraModelMappings);
+  // await moveByMappings(cameraModelMappings);
   await groupByLocation(groupFolder, csvFile, globalCsvFile, testRun);
+  // await printDateMismatch(groupFolder);
 
   print("Done");
 }
@@ -133,6 +134,19 @@ Future<void> groupByLocation(String groupFolder, String csvFile, String globalCs
   print("Found ${namedLocation.keys.length} locations");
 }
 
+Future<void> printDateMismatch(String groupFolder) async {
+  final files = Directory(groupFolder).listSync(recursive: true);
+  for (final file in files) {
+    if (file is File) {
+      final tags = await readExifFromFile(file);
+      final exifDateTime = tags["EXIF DateTimeOriginal"], imageDateTime = tags["Image DateTime"];
+      if (exifDateTime != null && imageDateTime != null && exifDateTime.toString() != imageDateTime.toString()) {
+        print("Mismatch for ${path.basename(file.path)}, exif: $exifDateTime, imag: $imageDateTime");
+      }
+    }
+  }
+}
+
 class ImageInfo {
   ImageInfo._(this.latitude, this.longitude, this.dateTime);
 
@@ -142,11 +156,11 @@ class ImageInfo {
         longitude = tags["GPS GPSLongitude"],
         latitudeRef = tags["GPS GPSLatitudeRef"],
         longitudeRef = tags["GPS GPSLongitudeRef"],
-        imageDateTime = tags["Image DateTime"],
-        exifDateTime = tags["EXIF DateTimeOriginal"];
+        exifDateTime = tags["EXIF DateTimeOriginal"],
+        imageDateTime = tags["Image DateTime"];
     final latitudeNum = _parseCoordinate(latitude?.toString(), latitudeRef?.toString().toUpperCase() == "S"),
         longitudeNum = _parseCoordinate(longitude?.toString(), longitudeRef?.toString().toUpperCase() == "W"),
-        dateTime = _parseDateTime(imageDateTime?.toString()) ?? _parseDateTime(exifDateTime?.toString());
+        dateTime = _parseDateTime(exifDateTime?.toString()) ?? _parseDateTime(imageDateTime?.toString());
     if (dateTime != null) {
       return ImageInfo._(latitudeNum, longitudeNum, dateTime);
     }
@@ -261,7 +275,7 @@ class LocationInfo {
   bool operator ==(Object other) => other is LocationInfo ? year == other.year && city == other.city && country == other.country : false;
 
   @override
-  int get hashCode => year.hashCode * (city?.hashCode ?? 1) * (country?.hashCode ?? 1);
+  int get hashCode => year * (city?.hashCode ?? 1) * (country?.hashCode ?? 1);
 
   @override
   String toString() => "($year) ${country != null ? "${country!} - " : ""}${city ?? ""}".trim();
