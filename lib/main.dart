@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:args/args.dart';
 import 'package:exif/exif.dart';
 import 'package:geocoder_offline/geocoder_offline.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
 
 import 'country_codes.dart';
@@ -27,10 +28,11 @@ void main(List<String> args) async {
   }
 
   final cameraModelMappings = (config["camera_model_folder_mappings"] as Map).cast<String, String>();
-  final groupFolders = (config["group_by_location_folders"] as List).cast<String>();
+  final groupLocationFolders = (config["group_by_location_folders"] as List).cast<String>();
+  final groupDayFolders = (config["group_by_day_event_folders"] as List).cast<String>();
   final videosFolder = config["videos_folder"] as String;
   final screenshotsFolder = config["screenshots_folder"] as String;
-  for (final folder in groupFolders) {
+  for (final folder in groupLocationFolders) {
     final groupFolder = path.join(cameraRollFolder, folder);
     if (!Directory(groupFolder).existsSync()) {
       print("Config does not contain \"group_by_location_folder\"");
@@ -57,10 +59,14 @@ void main(List<String> args) async {
   }
 
   await moveByMappings(cameraRollFolder, cameraModelMappings, videosFolder, screenshotsFolder, testRun);
-  for (final folder in groupFolders) {
+  for (final folder in groupLocationFolders) {
     final groupFolder = path.join(cameraRollFolder, folder);
     await groupByLocation(groupFolder, csvFile, globalCsvFile, testRun);
     // await printDateMismatch(groupFolder);
+  }
+  for (final folder in groupDayFolders) {
+    final groupFolder = path.join(cameraRollFolder, folder);
+    await groupByDayEvent(groupFolder, testRun);
   }
 
   print("Done");
@@ -191,6 +197,61 @@ Future<void> groupByLocation(String groupFolder, String csvFile, String globalCs
   }
 
   print("Found ${namedLocation.keys.length} locations");
+}
+
+Future<void> groupByDayEvent(
+  String groupFolder,
+  bool testRun,
+) async {
+  final files = Directory(groupFolder).listSync();
+
+  var index = 0;
+  var length = files.length;
+  var progressMessage = "", previousProgressMessage = "";
+  var group = <String, List<File>>{};
+  var formatter = DateFormat('yyyy-MM-dd');
+
+  //* Move by mappings
+  for (final file in files) {
+    if (file is File) {
+      final info = await ImageInfo.createFromFile(file);
+      if (info != null) {
+        final dateFolder = formatter.format(info.dateTime);
+        group[dateFolder] ??= <File>[];
+        group[dateFolder]!.add(file);
+
+        progressMessage = (index * 100 ~/ length).toString() + "%";
+        if (progressMessage != previousProgressMessage) {
+          print(progressMessage);
+        }
+        previousProgressMessage = progressMessage;
+      }
+    }
+    index++;
+  }
+
+  group.removeWhere((key, list) => list.length < 10);
+  final count = group.map((key, list) => MapEntry(key, list.length));
+  var totalCount = 0;
+  for (final key in count.keys) {
+    totalCount += count[key]!;
+  }
+
+  if (!testRun) {
+    for (final key in group.keys) {
+      for (final file in group[key]!) {
+        final folder = Directory(path.join(groupFolder, key));
+        if (!folder.existsSync()) {
+          folder.createSync(recursive: true);
+        }
+        final newFile = path.join(folder.path, path.basename(file.path));
+        file.renameSync(newFile);
+      }
+    }
+  }
+
+  print("Grouped ${count.length} groups: $count");
+  print("Total count $totalCount");
 }
 
 Future<void> printDateMismatch(String groupFolder) async {

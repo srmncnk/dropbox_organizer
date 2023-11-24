@@ -9,6 +9,7 @@ dependencies:
   exif: 
   geocoder_offline:
   http: 
+  intl:
 
 dev_dependencies:
   pedantic: ^1.8.0
