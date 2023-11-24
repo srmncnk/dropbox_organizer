@@ -26,16 +26,16 @@ void main(List<String> args) async {
     return;
   }
 
-  final cameraModelMappings = config["camera_model_folder_mappings"];
-  if (cameraModelMappings is! Map) {
-    print("Config does not contain a valid \"camera_model_folder_mappings\"");
-    return;
-  }
-
-  final groupFolder = path.join(cameraRollFolder, config["group_by_location_folder"]);
-  if (!Directory(groupFolder).existsSync()) {
-    print("Config does not contain \"group_by_location_folder\"");
-    return;
+  final cameraModelMappings = (config["camera_model_folder_mappings"] as Map).cast<String, String>();
+  final groupFolders = (config["group_by_location_folders"] as List).cast<String>();
+  final videosFolder = config["videos_folder"] as String;
+  final screenshotsFolder = config["screenshots_folder"] as String;
+  for (final folder in groupFolders) {
+    final groupFolder = path.join(cameraRollFolder, folder);
+    if (!Directory(groupFolder).existsSync()) {
+      print("Config does not contain \"group_by_location_folder\"");
+      return;
+    }
   }
 
   final csvFile = path.join(path.dirname(configFile), config["location_csv_file"]);
@@ -56,15 +56,74 @@ void main(List<String> args) async {
     return;
   }
 
-  // await moveByMappings(cameraModelMappings);
-  await groupByLocation(groupFolder, csvFile, globalCsvFile, testRun);
-  // await printDateMismatch(groupFolder);
+  await moveByMappings(cameraRollFolder, cameraModelMappings, videosFolder, screenshotsFolder, testRun);
+  for (final folder in groupFolders) {
+    final groupFolder = path.join(cameraRollFolder, folder);
+    await groupByLocation(groupFolder, csvFile, globalCsvFile, testRun);
+    // await printDateMismatch(groupFolder);
+  }
 
   print("Done");
 }
 
-Future<void> moveByMappings(Map<String, String> mappings) {
-  throw Exception("Not implemented");
+Future<void> moveByMappings(
+  String cameraRollFolder,
+  Map<String, String> mappings,
+  String videosFolder,
+  String screenshotsFolder,
+  bool testRun,
+) async {
+  final files = Directory(cameraRollFolder).listSync();
+
+  var index = 0;
+  var length = files.length;
+  var progressMessage = "", previousProgressMessage = "";
+  var moved = <String, int>{};
+  var unknown = <String, int>{};
+
+  //* Move by mappings
+  for (final file in files) {
+    if (file is File) {
+      final info = await ImageInfo.createFromFile(file);
+      if (info != null) {
+        String? pathToMove;
+        if (mappings.containsKey(info.model)) {
+          final key = mappings[info.model!]!;
+          pathToMove = path.join(cameraRollFolder, key, path.basename(file.path));
+          moved[key] = (moved[key] ?? 0) + 1;
+        } else if (file.path.toLowerCase().endsWith(".png")) {
+          pathToMove = path.join(cameraRollFolder, screenshotsFolder, path.basename(file.path));
+          moved[screenshotsFolder] = (moved[screenshotsFolder] ?? 0) + 1;
+        } else if (file.path.toLowerCase().endsWith(".mov") || file.path.toLowerCase().endsWith(".mp4")) {
+          pathToMove = path.join(cameraRollFolder, videosFolder, path.basename(file.path));
+          moved[videosFolder] = (moved[videosFolder] ?? 0) + 1;
+        } else {
+          final key = info.model ?? path.extension(file.path);
+          unknown[key] = (unknown[key] ?? 0) + 1;
+        }
+
+        if (pathToMove != null) {
+          if (!testRun) {
+            final directory = Directory(File(pathToMove).parent.path);
+            if (!directory.existsSync()) {
+              directory.createSync(recursive: true);
+            }
+            file.renameSync(pathToMove);
+          }
+        }
+
+        progressMessage = (index * 100 ~/ length).toString() + "%";
+        if (progressMessage != previousProgressMessage) {
+          print(progressMessage);
+        }
+        previousProgressMessage = progressMessage;
+      }
+    }
+    index++;
+  }
+
+  print("Moved $moved");
+  print("Unknown $unknown");
 }
 
 Future<void> groupByLocation(String groupFolder, String csvFile, String globalCsvFile, bool testRun) async {
@@ -148,7 +207,7 @@ Future<void> printDateMismatch(String groupFolder) async {
 }
 
 class ImageInfo {
-  ImageInfo._(this.latitude, this.longitude, this.dateTime);
+  ImageInfo._(this.latitude, this.longitude, this.dateTime, this.model);
 
   static Future<ImageInfo?> createFromFile(File file) async {
     final tags = await readExifFromFile(file);
@@ -157,16 +216,18 @@ class ImageInfo {
         latitudeRef = tags["GPS GPSLatitudeRef"],
         longitudeRef = tags["GPS GPSLongitudeRef"],
         exifDateTime = tags["EXIF DateTimeOriginal"],
-        imageDateTime = tags["Image DateTime"];
+        imageDateTime = tags["Image DateTime"],
+        imageModel = tags["Image Model"];
     final latitudeNum = _parseCoordinate(latitude?.toString(), latitudeRef?.toString().toUpperCase() == "S"),
         longitudeNum = _parseCoordinate(longitude?.toString(), longitudeRef?.toString().toUpperCase() == "W"),
         dateTime = _parseDateTime(exifDateTime?.toString()) ?? _parseDateTime(imageDateTime?.toString()) ?? _guessFileAge(file);
-    return ImageInfo._(latitudeNum, longitudeNum, dateTime);
+    return ImageInfo._(latitudeNum, longitudeNum, dateTime, imageModel?.printable);
   }
 
   double? latitude;
   double? longitude;
   DateTime dateTime;
+  String? model;
 
   //* home point
   // static final home = Location(46.280644, 15.056918);
